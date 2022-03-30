@@ -1,63 +1,77 @@
-from sre_constants import SUCCESS
-import requests
-import pandas
-from splinter import Browser1
-from bs4 import BeautifulSoup
+from splinter import Browser
+from bs4 import BeautifulSoup as bs
+import time
 from webdriver_manager.chrome import ChromeDriverManager
 import pandas as pd
-import time
 
-url_list =['https://redplanetscience.com/',"https://spaceimages-mars.com",'https://galaxyfacts-mars.com/',"https://marshemispheres.com/"]
-def scrape():
-    url_list=['https://redplanetscience.com/',"https://spaceimages-mars.com",'https://galaxyfacts-mars.com/',"https://marshemispheres.com/"]
+
+def scrape_info():
     executable_path = {'executable_path': ChromeDriverManager().install()}
     browser = Browser('chrome', **executable_path, headless=False)
-    data_dict={}
-    browser = Browser('chrome', **executable_path, headless=False)
-    data_dict={}
-    browser.visit(url_list[0])
+
+    url = "https://redplanetscience.com/"
+    browser.visit(url)
+
+    time.sleep(5)
+
     html = browser.html
-    soup = BeautifulSoup(html, 'html.parser') 
-    text = soup.select_one("div.list_text")
-    img=soup.select_one("div.list_image")
-    data_dict["news_title"]=text.find("div", class_="content_title").get_text()
-    data_dict["news_p"] =text.find("div", class_="article_teaser_body").get_text()
-    data_dict["news_date"]=text.find("div", class_="list_date").get_text() 
-    data_dict['news_img']=img.find("img").get('src')
-    print("SUCCESS#1") 
-    browser.visit(url_list[1])
-    time.sleep(1)
-    browser.find_by_css('.fancybox-thumbs').click() 
-    time.sleep(1)
+    soup = bs(html, "html.parser")
+
+    news_title = soup.find('div', class_="content_title").text
+    news_p = soup.find('div', class_="article_teaser_body").text
+
+    url = "https://spaceimages-mars.com"
+    browser.visit(url)
+
+    full_image_btn = browser.find_by_tag('button')[1]
+    full_image_btn.click()
+
+    root_url = "https://spaceimages-mars.com/"
     html = browser.html
-    soup = BeautifulSoup(html, 'html.parser')
-    partial_img_url=soup.select_one("img.fancybox-image" ).get("src")
-    data_dict["feuture_img_url"] = f"https://spaceimages-mars.com/{partial_img_url}"
-    print("SUCCESS#2") 
+    soup = bs(html, "html.parser")
+    image = soup.find('img', class_="fancybox-image")
+    image_url = image.get('src')
+    featured_img_url = root_url + image_url
 
-    tables = pd.read_html(url_list[2])
-    df=tables[0]
-    df.columns=df.iloc[0]
-    df.drop(0,inplace=True)
-    df.set_index('Mars - Earth Comparison' , inplace=True)
-    mars_df = df.to_html() 
-    mars_df =mars_df.replace("\n", "")
-    data_dict["tables"]=mars_df
-    print("SUCCESS#3") 
+    df = pd.read_html("https://galaxyfacts-mars.com")[0]
+    df.columns=["Description", "Mars", "Earth"]
+    df.set_index("Description", inplace=True)
+    mars_facts = df.to_html()
 
+    url = "https://marshemispheres.com/"
+    browser.visit(url)
 
-    browser.visit(url_list[3])
-    
-    for item in range(4):
-        
-        browser.find_by_css("a.product-item h3")[item].click()
-        sample_element = browser.links.find_by_text("Sample").first
-        data_dict[f"img_url_{item}"] = sample_element["href"]        
-        data_dict[f"title_{item}"] = browser.find_by_css("h2.title").text
-        browser.back()
-        time.sleep(1)
-    print("SUCCESS#4") 
+    html = browser.html
+    soup = bs(html, "html.parser")
+
+    results = soup.find_all('div',class_='item')
+    hemisphere_image_urls = []
+    for result in results:
+        image_dict = {}
+        title = result.find("h3").text
+        link = result.find("a")["href"]
+        image_link = "https://marshemispheres.com/" + link
+        browser.visit(image_link)
+        time.sleep(3)
+        html = browser.html
+        soup= bs(html, "html.parser")
+        full_size_img = soup.find("img", class_="wide-image")['src']
+        full_size_img_link = "https://marshemispheres.com/" + full_size_img
+        print(title)
+        print(image_link)
+        print(full_size_img_link)
+        image_dict['title']= title
+        image_dict['image_url']= full_size_img_link
+        hemisphere_image_urls.append(image_dict)
+
+    nasa_data = {
+    "news_title" : news_title,
+    "news_p" : news_p,
+    "mars_facts": mars_facts,
+    "featured_img_url" : featured_img_url,
+    "hemisphere_image_urls" : hemisphere_image_urls
+    }
 
     browser.quit()
-    print(data_dict)
-    return data_dict
+
+    return nasa_data
